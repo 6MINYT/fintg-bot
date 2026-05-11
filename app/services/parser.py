@@ -153,6 +153,35 @@ MERCHANT_ALIASES = {
     "airbnb": ("airbnb", "эйрбнб", "аирбнб"),
     "ryanair": ("ryanair", "райнэйр", "раянэйр"),
     "wizzair": ("wizzair", "wizz air", "виззэйр", "виз эйр"),
+    # Cafes / restaurants
+    "mcdonalds": (
+        "mcdonalds",
+        "mcdonald's",
+        "mcdonald",
+        "макдоналдс",
+        "макдоналтдс",
+        "макдональдс",
+        "макдональд",
+        "мак",
+        "макдак",
+    ),
+    "kfc": ("kfc", "кфс", "кфц"),
+    "burger king": ("burger king", "бургер кинг"),
+    # Subscriptions
+    "netflix": ("netflix", "нетфликс"),
+    "spotify": ("spotify", "спотифай"),
+    "youtube premium": ("youtube premium", "ютуб премиум", "youtube"),
+    "icloud": ("icloud", "айклауд", "i cloud"),
+    "google one": ("google one", "гугл one", "гугл ван"),
+    "chatgpt": ("chatgpt", "chat gpt", "чатгпт", "чат gpt"),
+    "telegram premium": ("telegram premium", "телеграм премиум"),
+    "apple music": ("apple music", "эпл music", "эпл мьюзик"),
+    "yandex plus": ("yandex plus", "яндекс плюс", "плюс"),
+    "kinopoisk": ("kinopoisk", "кинопоиск"),
+    "ivi": ("ivi", "иви"),
+    "steam": ("steam", "стим"),
+    "ps plus": ("ps plus", "playstation plus", "ps+", "пс плюс"),
+    "xbox game pass": ("xbox game pass", "game pass", "гейм пасс"),
 }
 
 MERCHANT_CATEGORIES = {
@@ -252,6 +281,23 @@ MERCHANT_CATEGORIES = {
     "airbnb": "travel",
     "ryanair": "travel",
     "wizzair": "travel",
+    "mcdonalds": "cafes",
+    "kfc": "cafes",
+    "burger king": "cafes",
+    "netflix": "subscriptions",
+    "spotify": "subscriptions",
+    "youtube premium": "subscriptions",
+    "icloud": "subscriptions",
+    "google one": "subscriptions",
+    "chatgpt": "subscriptions",
+    "telegram premium": "subscriptions",
+    "apple music": "subscriptions",
+    "yandex plus": "subscriptions",
+    "kinopoisk": "subscriptions",
+    "ivi": "subscriptions",
+    "steam": "subscriptions",
+    "ps plus": "subscriptions",
+    "xbox game pass": "subscriptions",
 }
 
 CATEGORY_RULES = {
@@ -278,7 +324,21 @@ CATEGORY_RULES = {
     },
     "cafes": {
         "type": TransactionType.expense,
-        "keywords": ("кафе", "кофе", "ресторан", "бар", "mcdonald", "kfc", "pizza"),
+        "keywords": (
+            "кафе",
+            "кофе",
+            "ресторан",
+            "бар",
+            "mcdonald",
+            "макдоналдс",
+            "макдоналтдс",
+            "макдональдс",
+            "макдональд",
+            "макдак",
+            "kfc",
+            "кфс",
+            "pizza",
+        ),
     },
     "delivery": {
         "type": TransactionType.expense,
@@ -353,7 +413,19 @@ CATEGORY_RULES = {
     },
     "utilities": {
         "type": TransactionType.expense,
-        "keywords": ("коммунал", "коммуналка", "свет", "газ", "вода", "интернет", "utilities"),
+        "keywords": (
+            "коммунал",
+            "коммуналка",
+            "свет",
+            "газ",
+            "вода",
+            "интернет",
+            "связь",
+            "мобильная связь",
+            "телефон",
+            "мобильный",
+            "utilities",
+        ),
     },
     "health": {
         "type": TransactionType.expense,
@@ -454,6 +526,39 @@ CATEGORY_RULES = {
             "sport",
         ),
     },
+    "education": {
+        "type": TransactionType.expense,
+        "keywords": (
+            "образование",
+            "обучение",
+            "учеба",
+            "учёба",
+            "курсы",
+            "курс",
+            "урок",
+            "уроки",
+            "занятия",
+            "репетитор",
+            "репетитору",
+            "школа",
+            "университет",
+            "универ",
+            "институт",
+            "лекция",
+            "семинар",
+            "тренинг",
+            "мастер-класс",
+            "мастеркласс",
+            "английский",
+            "польский язык",
+            "education",
+            "course",
+            "courses",
+            "lesson",
+            "school",
+            "university",
+        ),
+    },
     "travel": {
         "type": TransactionType.expense,
         "keywords": (
@@ -509,6 +614,54 @@ CATEGORY_RULES = {
             "theater",
             "gallery",
             "concert",
+        ),
+    },
+    "subscriptions": {
+        "type": TransactionType.expense,
+        "keywords": (
+            "подписка",
+            "подписки",
+            "абонплата",
+            "ежемесячный платеж",
+            "netflix",
+            "нетфликс",
+            "spotify",
+            "спотифай",
+            "youtube premium",
+            "ютуб премиум",
+            "icloud",
+            "айклауд",
+            "google one",
+            "chatgpt",
+            "чатгпт",
+            "telegram premium",
+            "телеграм премиум",
+            "apple music",
+            "yandex plus",
+            "яндекс плюс",
+            "кинопоиск",
+            "ivi",
+            "steam",
+            "ps plus",
+            "game pass",
+            "subscription",
+            "subscriptions",
+        ),
+    },
+    "entertainment": {
+        "type": TransactionType.expense,
+        "keywords": (
+            "развлечение",
+            "развлечения",
+            "аквапарк",
+            "парк аттракционов",
+            "аттракционы",
+            "батуты",
+            "боулинг",
+            "квест",
+            "игры",
+            "кино",
+            "entertainment",
         ),
     },
 }
@@ -622,17 +775,17 @@ def _extract_date(text: str, today: date) -> date:
         year, month, day = map(int, iso_match.groups())
         return date(year, month, day)
 
-    dot_match = DOT_DATE_RE.search(text)
-    if dot_match:
-        day, month, year = dot_match.groups()
-        return date(int(year or today.year), int(month), int(day))
-
     month_match = MONTH_DATE_RE.search(text)
     if month_match:
         day, month_name, year = month_match.groups()
         month = MONTHS.get(month_name.lower())
         if month:
             return date(int(year or today.year), month, int(day))
+
+    dot_match = DOT_DATE_RE.search(text)
+    if dot_match and _is_dot_date_match(text, dot_match):
+        day, month, year = dot_match.groups()
+        return date(int(year or today.year), int(month), int(day))
 
     return today
 
@@ -680,11 +833,23 @@ def _cleanup_note(text: str) -> str | None:
 def _remove_date_text(text: str) -> str:
     cleaned = text
     cleaned = ISO_DATE_RE.sub("", cleaned)
-    cleaned = DOT_DATE_RE.sub("", cleaned)
     cleaned = MONTH_DATE_RE.sub(_remove_month_date_match, cleaned)
+    cleaned = DOT_DATE_RE.sub(lambda match: "" if _is_dot_date_match(cleaned, match) else match.group(0), cleaned)
     for word in ("сегодня", "вчера", "позавчера", "today", "yesterday"):
         cleaned = re.sub(rf"\b{word}\b", "", cleaned, flags=re.I)
     return cleaned
+
+
+def _is_dot_date_match(text: str, match: re.Match) -> bool:
+    if match.group(3):
+        return True
+
+    separator = text[match.start(1) + len(match.group(1))]
+    if separator == "/":
+        return True
+
+    without_match = f"{text[: match.start()]} {text[match.end() :]}"
+    return AMOUNT_RE.search(without_match) is not None
 
 
 def _remove_month_date_match(match: re.Match) -> str:

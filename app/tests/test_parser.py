@@ -85,6 +85,55 @@ class ParserTest(TestCase):
         self.assertEqual(parsed.currency, "EUR")
         self.assertEqual(parsed.category, "cafes")
 
+    def test_decimal_amount_before_cafe_is_not_date(self) -> None:
+        parsed = parse_transaction("17.4 кафе", TODAY)
+
+        self.assertEqual(parsed.amount, Decimal("17.4"))
+        self.assertEqual(parsed.occurred_on, TODAY)
+        self.assertEqual(parsed.type, TransactionType.expense)
+        self.assertEqual(parsed.category, "cafes")
+
+    def test_decimal_amount_after_cafe_is_not_date(self) -> None:
+        parsed = parse_transaction("кафе 17.4", TODAY)
+
+        self.assertEqual(parsed.amount, Decimal("17.4"))
+        self.assertEqual(parsed.occurred_on, TODAY)
+        self.assertEqual(parsed.type, TransactionType.expense)
+        self.assertEqual(parsed.category, "cafes")
+
+    def test_mcdonalds_typo_is_cafe(self) -> None:
+        parsed = parse_transaction("макдоналтдс 17.4", TODAY)
+
+        self.assertEqual(parsed.amount, Decimal("17.4"))
+        self.assertEqual(parsed.type, TransactionType.expense)
+        self.assertEqual(parsed.category, "cafes")
+        self.assertEqual(parsed.merchant, "mcdonalds")
+
+    def test_mcdonalds_without_s_is_cafe(self) -> None:
+        parsed = parse_transaction("макдональд 17.4", TODAY)
+
+        self.assertEqual(parsed.amount, Decimal("17.4"))
+        self.assertEqual(parsed.type, TransactionType.expense)
+        self.assertEqual(parsed.category, "cafes")
+        self.assertEqual(parsed.merchant, "mcdonalds")
+
+    def test_month_date_with_decimal_amount_and_mcdonalds(self) -> None:
+        parsed = parse_transaction("1 мая Макдональд 17.4", TODAY)
+
+        self.assertEqual(parsed.amount, Decimal("17.4"))
+        self.assertEqual(parsed.occurred_on, date(2026, 5, 1))
+        self.assertEqual(parsed.type, TransactionType.expense)
+        self.assertEqual(parsed.category, "cafes")
+        self.assertEqual(parsed.merchant, "mcdonalds")
+
+    def test_short_mcdonalds_alias_is_cafe(self) -> None:
+        parsed = parse_transaction("мак 17.4", TODAY)
+
+        self.assertEqual(parsed.amount, Decimal("17.4"))
+        self.assertEqual(parsed.type, TransactionType.expense)
+        self.assertEqual(parsed.category, "cafes")
+        self.assertEqual(parsed.merchant, "mcdonalds")
+
     def test_euroopt_typo_is_groceries(self) -> None:
         parsed = parse_transaction("еврорт 56", TODAY)
 
@@ -242,6 +291,21 @@ class ParserTest(TestCase):
         self.assertEqual(parsed.type, TransactionType.expense)
         self.assertEqual(parsed.category, "sport")
 
+    def test_training_is_education(self) -> None:
+        parsed = parse_transaction("06 мая обучение 90", TODAY)
+
+        self.assertEqual(parsed.amount, Decimal("90"))
+        self.assertEqual(parsed.occurred_on, date(2026, 5, 6))
+        self.assertEqual(parsed.type, TransactionType.expense)
+        self.assertEqual(parsed.category, "education")
+
+    def test_courses_are_education(self) -> None:
+        parsed = parse_transaction("курсы английского 120", TODAY)
+
+        self.assertEqual(parsed.amount, Decimal("120"))
+        self.assertEqual(parsed.type, TransactionType.expense)
+        self.assertEqual(parsed.category, "education")
+
     def test_hotel_is_travel(self) -> None:
         parsed = parse_transaction("отель 300", TODAY)
 
@@ -270,6 +334,44 @@ class ParserTest(TestCase):
         self.assertEqual(parsed.amount, Decimal("80"))
         self.assertEqual(parsed.type, TransactionType.expense)
         self.assertEqual(parsed.category, "culture")
+
+    def test_water_park_is_entertainment(self) -> None:
+        parsed = parse_transaction("аквапарк 190", TODAY)
+
+        self.assertEqual(parsed.amount, Decimal("190"))
+        self.assertEqual(parsed.type, TransactionType.expense)
+        self.assertEqual(parsed.category, "entertainment")
+
+    def test_subscription_keyword(self) -> None:
+        parsed = parse_transaction("подписка 15", TODAY)
+
+        self.assertEqual(parsed.amount, Decimal("15"))
+        self.assertEqual(parsed.type, TransactionType.expense)
+        self.assertEqual(parsed.category, "subscriptions")
+
+    def test_chatgpt_subscription_merchant(self) -> None:
+        parsed = parse_transaction("chatgpt 20 usd", TODAY)
+
+        self.assertEqual(parsed.amount, Decimal("20"))
+        self.assertEqual(parsed.currency, "USD")
+        self.assertEqual(parsed.type, TransactionType.expense)
+        self.assertEqual(parsed.category, "subscriptions")
+        self.assertEqual(parsed.merchant, "chatgpt")
+
+    def test_youtube_premium_subscription_merchant(self) -> None:
+        parsed = parse_transaction("ютуб премиум 12", TODAY)
+
+        self.assertEqual(parsed.amount, Decimal("12"))
+        self.assertEqual(parsed.type, TransactionType.expense)
+        self.assertEqual(parsed.category, "subscriptions")
+        self.assertEqual(parsed.merchant, "youtube premium")
+
+    def test_mobile_connection_is_utilities(self) -> None:
+        parsed = parse_transaction("связь 35", TODAY)
+
+        self.assertEqual(parsed.amount, Decimal("35"))
+        self.assertEqual(parsed.type, TransactionType.expense)
+        self.assertEqual(parsed.category, "utilities")
 
     def test_month_date(self) -> None:
         parsed = parse_transaction("5 мая кафе 25", TODAY)

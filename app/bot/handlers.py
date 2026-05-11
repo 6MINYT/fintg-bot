@@ -1,6 +1,8 @@
+import csv
 import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
+from io import BytesIO, StringIO
 from pathlib import Path
 
 from aiogram import F, Router
@@ -39,6 +41,7 @@ from app.services.transactions import (
     delete_transaction,
     delete_all_user_transactions,
     export_transactions,
+    export_transactions_csv,
     get_last_transaction,
     get_transaction_by_id,
     get_or_create_user,
@@ -50,6 +53,7 @@ from app.services.transactions import (
     spending_by_category,
     total_by_merchant,
     totals_by_category,
+    transaction_duplicate_exists,
     update_user_default_currency,
     update_transaction,
     user_activity_stats,
@@ -68,6 +72,7 @@ EDIT_TARGET_AMOUNT_RE = re.compile(r"^(\d+)\s+на\s+(.+)$", re.I)
 EDIT_TARGET_LABEL_RE = re.compile(r"^(?:номер|запись|транзакц(?:ия|ию|ии)?)\s+#?(\d+)\s*(?:на\s+)?(.*)$", re.I)
 TARGET_ID_RE = re.compile(r"(?:#|id\s+|айди\s+|запись\s+#?)(\d+)", re.I)
 PENDING_TRANSACTIONS: dict[int, ParsedTransaction] = {}
+PENDING_CSV_IMPORT_USERS: set[int] = set()
 
 
 HELP_TEXT = """Я умею записывать доходы и расходы простыми сообщениями.
@@ -92,6 +97,8 @@ HELP_TEXT = """Я умею записывать доходы и расходы �
 /users - админская статистика пользователей
 /merchant lidl - сколько потрачено в конкретном магазине
 /export - выгрузка в Excel
+/export_csv - админская выгрузка всех записей в CSV
+/import_csv - админский импорт CSV за весь период
 /help - подсказка
 /menu - показать кнопки меню
 
@@ -131,6 +138,37 @@ async def users_stats_handler(message: Message) -> None:
         await message.answer("Эта команда доступна только админу.")
         return
     await message.answer(await _build_user_activity_text())
+
+
+@router.message(Command("export_csv"))
+async def export_csv_handler(message: Message) -> None:
+    if not _is_admin(message.from_user.id):
+        await message.answer("Эта команда доступна только админу.")
+        return
+
+    async with SessionLocal() as session:
+        user = await get_or_create_user(
+            session,
+            message.from_user.id,
+            message.from_user.username,
+            message.from_user.first_name,
+        )
+        path = await export_transactions_csv(session, user, Path("exports"))
+        await session.commit()
+
+    await message.answer_document(FSInputFile(path), caption="CSV export за весь период.")
+
+
+@router.message(Command("import_csv"))
+async def import_csv_handler(message: Message) -> None:
+    if not _is_admin(message.from_user.id):
+        await message.answer("Эта команда доступна только админу.")
+        return
+    PENDING_CSV_IMPORT_USERS.add(message.from_user.id)
+    await message.answer(
+        "Пришли CSV-файл следующим сообщением. Импорт идет за весь период только в твои записи.\n"
+        "Дубликаты будут пропущены."
+    )
 
 
 @router.message(F.text.in_({"Отчеты", "📊 Отчеты"}))
@@ -494,6 +532,29 @@ async def settings_callback_handler(callback: CallbackQuery) -> None:
             await callback.message.answer("Эта настройка доступна только админу.")
             return
         await callback.message.answer(await _build_user_activity_text())
+    elif action == "export_csv":
+        if not _is_admin(callback.from_user.id):
+            await callback.message.answer("Эта настройка доступна только админу.")
+            return
+        async with SessionLocal() as session:
+            user = await get_or_create_user(
+                session,
+                callback.from_user.id,
+                callback.from_user.username,
+                callback.from_user.first_name,
+            )
+            path = await export_transactions_csv(session, user, Path("exports"))
+            await session.commit()
+        await callback.message.answer_document(FSInputFile(path), caption="CSV export за весь период.")
+    elif action == "import_csv":
+        if not _is_admin(callback.from_user.id):
+            await callback.message.answer("Эта настройка доступна только админу.")
+            return
+        PENDING_CSV_IMPORT_USERS.add(callback.from_user.id)
+        await callback.message.answer(
+            "Пришли CSV-файл следующим сообщением. Импорт идет за весь период только в твои записи.\n"
+            "Дубликаты будут пропущены."
+        )
     else:
         await callback.message.answer("Не понял настройку.")
 
@@ -625,10 +686,158 @@ async def _send_export(message: Message, period_text: str) -> None:
     await message.answer_document(FSInputFile(path), caption=_export_caption(from_date, to_date))
 
 
+async def _import_csv_text(message: Message, text: str) -> str:
+    try:
+        dialect = csv.Sniffer().sniff(text[:2048], delimiters=",;")
+    except csv.Error:
+        dialect = csv.excel
+    reader = csv.DictReader(StringIO(text), dialect=dialect)
+    if not reader.fieldnames:
+        return "CSV пустой или без заголовков."
+
+    errors = []
+    imported = 0
+    skipped_duplicates = 0
+    async with SessionLocal() as session:
+        user = await get_or_create_user(
+            session,
+            message.from_user.id,
+            message.from_user.username,
+            message.from_user.first_name,
+        )
+        for line_number, row in enumerate(reader, start=2):
+            try:
+                parsed, raw_text = _parse_csv_transaction(row, user.default_currency)
+            except ValueError as exc:
+                if len(errors) < 5:
+                    errors.append(f"строка {line_number}: {exc}")
+                continue
+
+            if await transaction_duplicate_exists(session, user, parsed):
+                skipped_duplicates += 1
+                continue
+
+            await add_transaction(session, user, parsed, raw_text)
+            imported += 1
+        await session.commit()
+
+    lines = [
+        "CSV импорт завершен.",
+        f"Добавлено: {imported}",
+        f"Пропущено дублей: {skipped_duplicates}",
+        f"Ошибок: {len(errors)}",
+    ]
+    if errors:
+        lines.extend(["", "Первые ошибки:"])
+        lines.extend(errors)
+    return "\n".join(lines)
+
+
+def _parse_csv_transaction(row: dict[str, str], default_currency: str) -> tuple[ParsedTransaction, str]:
+    normalized = {_normalize_csv_key(key): _clean_csv_value(value) for key, value in row.items()}
+
+    date_text = _csv_get(normalized, "date", "дата")
+    amount_text = _csv_get(normalized, "amount", "sum", "сумма")
+    type_text = _csv_get(normalized, "type", "тип")
+    currency_text = _csv_get(normalized, "currency", "валюта")
+    category_text = _csv_get(normalized, "category", "категория") or _csv_get(normalized, "category_label")
+    merchant = _csv_get(normalized, "merchant", "метка", "магазин")
+    note = _csv_get(normalized, "note", "заметка", "комментарий")
+    raw_text = _csv_get(normalized, "raw_text", "исходный текст") or "csv import"
+
+    if not date_text:
+        raise ValueError("нет даты")
+    if not amount_text:
+        raise ValueError("нет суммы")
+    if not type_text:
+        raise ValueError("нет типа")
+
+    try:
+        occurred_on = date.fromisoformat(date_text)
+    except ValueError as exc:
+        raise ValueError("дата должна быть в формате YYYY-MM-DD") from exc
+
+    try:
+        amount = Decimal(amount_text.replace(",", "."))
+    except InvalidOperation as exc:
+        raise ValueError("не смог прочитать сумму") from exc
+
+    tx_type = _parse_csv_transaction_type(type_text)
+    currency = normalize_currency(currency_text) or default_currency
+    category = normalize_category(category_text) if category_text else None
+    if not category:
+        category = "income" if tx_type == TransactionType.income else "other"
+
+    parsed = ParsedTransaction(
+        amount=amount,
+        type=tx_type,
+        category=category,
+        merchant=merchant or None,
+        occurred_on=occurred_on,
+        note=note or None,
+        currency=currency,
+    )
+    return parsed, raw_text
+
+
+def _parse_csv_transaction_type(value: str) -> TransactionType:
+    normalized = value.strip().lower()
+    if normalized in {"income", "доход", "приход"}:
+        return TransactionType.income
+    if normalized in {"expense", "расход", "трата"}:
+        return TransactionType.expense
+    raise ValueError("тип должен быть income/expense или Доход/Расход")
+
+
+def _normalize_csv_key(value: str | None) -> str:
+    return (value or "").strip().lower().replace(" ", "_")
+
+
+def _clean_csv_value(value: str | None) -> str:
+    return (value or "").strip()
+
+
+def _csv_get(row: dict[str, str], *keys: str) -> str:
+    for key in keys:
+        value = row.get(_normalize_csv_key(key))
+        if value:
+            return value
+    return ""
+
+
 @router.message(Command("delete", "del"))
 async def delete_command_handler(message: Message) -> None:
     delete_text = message.text.split(maxsplit=1)[1] if message.text and len(message.text.split(maxsplit=1)) > 1 else ""
     await _delete_transaction_by_text(message, delete_text)
+
+
+@router.message(F.document)
+async def document_handler(message: Message) -> None:
+    if not message.document:
+        return
+    filename = message.document.file_name or ""
+    if not filename.lower().endswith(".csv"):
+        await message.answer("Пока импортирую только CSV-файлы.")
+        return
+    if not _is_admin(message.from_user.id):
+        await message.answer("Импорт CSV доступен только админу.")
+        return
+    if message.from_user.id not in PENDING_CSV_IMPORT_USERS:
+        await message.answer("Чтобы импортировать CSV, сначала напиши /import_csv или нажми CSV import в настройках.")
+        return
+
+    buffer = BytesIO()
+    await message.bot.download(message.document, destination=buffer)
+    buffer.seek(0)
+    try:
+        text = buffer.getvalue().decode("utf-8-sig")
+    except UnicodeDecodeError:
+        await message.answer("Не смог прочитать CSV. Сохрани файл в UTF-8 и попробуй еще раз.")
+        return
+
+    result = await _import_csv_text(message, text)
+    PENDING_CSV_IMPORT_USERS.discard(message.from_user.id)
+    await message.answer(result)
 
 
 @router.message(F.text)
@@ -927,6 +1136,12 @@ def _settings_keyboard(is_admin: bool = False) -> InlineKeyboardMarkup:
     ]
     if is_admin:
         keyboard.append([InlineKeyboardButton(text="Статистика пользователей", callback_data="settings:users")])
+        keyboard.append(
+            [
+                InlineKeyboardButton(text="CSV export", callback_data="settings:export_csv"),
+                InlineKeyboardButton(text="CSV import", callback_data="settings:import_csv"),
+            ]
+        )
         keyboard.append([InlineKeyboardButton(text="Очистить мои записи", callback_data="admin_clear:ask")])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 

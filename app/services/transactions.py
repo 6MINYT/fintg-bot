@@ -1,3 +1,4 @@
+import csv
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -291,6 +292,68 @@ async def total_by_merchant(session: AsyncSession, user: User, merchant: str) ->
         .order_by(Transaction.currency)
     )
     return [(row[0], Decimal(row[1])) for row in rows.all()]
+
+
+async def transaction_duplicate_exists(session: AsyncSession, user: User, parsed: ParsedTransaction) -> bool:
+    existing_id = await session.scalar(
+        select(Transaction.id)
+        .where(
+            Transaction.user_id == user.id,
+            Transaction.type == parsed.type,
+            Transaction.amount == parsed.amount,
+            Transaction.currency == parsed.currency,
+            Transaction.category == parsed.category,
+            Transaction.merchant == parsed.merchant,
+            Transaction.note == parsed.note,
+            Transaction.occurred_on == parsed.occurred_on,
+        )
+        .limit(1)
+    )
+    return existing_id is not None
+
+
+async def export_transactions_csv(session: AsyncSession, user: User, export_dir: Path) -> Path:
+    export_dir.mkdir(parents=True, exist_ok=True)
+    rows = await session.scalars(
+        select(Transaction)
+        .where(Transaction.user_id == user.id)
+        .order_by(Transaction.occurred_on.asc(), Transaction.user_tx_number.asc(), Transaction.id.asc())
+    )
+
+    path = export_dir / f"transactions_{user.telegram_id}_all.csv"
+    with path.open("w", newline="", encoding="utf-8-sig") as file:
+        writer = csv.DictWriter(
+            file,
+            fieldnames=[
+                "number",
+                "date",
+                "type",
+                "amount",
+                "currency",
+                "category",
+                "category_label",
+                "merchant",
+                "note",
+                "raw_text",
+            ],
+        )
+        writer.writeheader()
+        for tx in rows:
+            writer.writerow(
+                {
+                    "number": tx.user_tx_number or tx.id,
+                    "date": tx.occurred_on.isoformat(),
+                    "type": tx.type.value,
+                    "amount": f"{tx.amount:.2f}",
+                    "currency": tx.currency,
+                    "category": tx.category,
+                    "category_label": category_label(tx.category),
+                    "merchant": tx.merchant or "",
+                    "note": tx.note or "",
+                    "raw_text": tx.raw_text,
+                }
+            )
+    return path
 
 
 async def export_transactions(

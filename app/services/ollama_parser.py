@@ -32,8 +32,10 @@ TRANSACTION_SCHEMA = {
                     "home",
                     "shopping",
                     "sport",
+                    "education",
                     "travel",
                     "culture",
+                    "subscriptions",
                     "entertainment",
                     "other",
                 ],
@@ -97,15 +99,17 @@ def _build_prompt(text: str, today: date, default_currency: str) -> str:
         "- car: авто, машина, бензин, топливо, заправка, ремонт машины, автосервис, страховка, парковка\n"
         "- transport: такси, общественный транспорт, поездки\n"
         "- rent: аренда жилья, оплата квартиры, квартплата\n"
-        "- utilities: коммунальные услуги, коммуналка, интернет, свет, газ, вода\n"
+        "- utilities: коммунальные услуги, коммуналка, интернет, связь, мобильная связь, телефон, свет, газ, вода\n"
         "- health: медицина, врачи, стоматологи, клиники, больницы, анализы, аптеки, лекарства, Dr.Max, Ziko, Белфармация, Планета здоровья\n"
         "- personal_care: уход за собой, косметика, бытовая химия, Rossmann/Росман, Hebe, Natura, Sephora, Douglas, Notino, Остров чистоты, Мила\n"
         "- home: дом, ремонт квартиры/дома, стройматериалы, мебель, хозтовары, Castorama, Leroy Merlin, OBI, IKEA, JYSK, PSB Mrówka, ОМА, Материк\n"
         "- shopping: одежда, техника, товары, интернет-магазины, маркетплейсы, Allegro, AliExpress, Amazon, Temu, Shein, Wildberries, Ozon, Kufar, 21vek/21 век, OZ.by, Onliner, Media Expert, RTV Euro AGD, X-Kom, Zara, Reserved, Sinsay, CCC\n"
         "- sport: спортзал, фитнес, тренер, бассейн, йога, спорттовары, абонемент, Decathlon, Intersport, Спортмастер\n"
+        "- education: образование, обучение, курсы, уроки, репетитор, школа, университет, тренинг, мастер-класс\n"
         "- travel: путешествия, туризм, поездка, отпуск, отели, авиабилеты, визы, багаж, экскурсии\n"
         "- culture: культурные места, музеи, театр, выставки, галереи, концерты, опера, балет\n"
-        "- entertainment: кино, игры, события, подписки\n"
+        "- subscriptions: регулярные подписки и сервисы, Netflix, Spotify, YouTube Premium, iCloud, Google One, ChatGPT, Telegram Premium, Apple Music, Яндекс Плюс, Кинопоиск, Steam, PS Plus, Xbox Game Pass\n"
+        "- entertainment: развлечения, аквапарк, парк аттракционов, боулинг, квесты, кино, игры, события\n"
         "- other: если ничего не подходит"
     )
 

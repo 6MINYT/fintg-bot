@@ -9,7 +9,7 @@ It is built around short natural messages such as `300 lidl`, `yesterday 42 bied
 - Parse simple income and expense messages.
 - Detect dates like `today`, `yesterday`, `12.05`, `2026-05-12`, `5 мая`, and Polish month names.
 - Categorize popular Polish and Belarusian stores automatically.
-- Support groceries, car, transport, rent, utilities, cafes, delivery, health, personal care, home and renovation, shopping, sport, travel, culture, entertainment, and other.
+- Support groceries, car, transport, rent, utilities, cafes, delivery, health, personal care, home and renovation, shopping, sport, education, travel, culture, subscriptions, entertainment, and other.
 - Keep transaction numbers isolated per Telegram user: each user has their own `#1`, `#2`, `#3`.
 - Keep default currency per user: `PLN`, `USD`, `BYN`, or `EUR`.
 - Ask for confirmation before suspicious entries, for example category `Other` or amount `0`.
@@ -109,6 +109,8 @@ Russian messages are supported well because the bot was designed around Russian-
 - `/edit` - show records from the last 14 days with edit examples.
 - `/merchant lidl` - show totals for a merchant.
 - `/export` - ask for an export period and send an Excel file.
+- `/export_csv` - admin-only CSV export for all records of the current user.
+- `/import_csv` - admin-only CSV import for all records of the current user.
 - `/delete #12` or `/del #12` - delete a record.
 - `/myid` - show your Telegram ID.
 - `/users` - admin-only user activity statistics.
@@ -201,6 +203,31 @@ The generated workbook includes:
 - expense chart;
 - top merchants.
 
+## System CSV Export And Import
+
+Admin users can export and import their own records as CSV for backup or migration:
+
+```text
+/export_csv
+/import_csv
+```
+
+CSV export always uses the full period and includes:
+
+```csv
+number,date,type,amount,currency,category,category_label,merchant,note,raw_text
+1,2026-05-11,expense,60.00,PLN,groceries,Продукты,euroopt,,евроопт 60
+```
+
+CSV import accepts the same format. It also accepts Russian column names such as `Дата`, `Тип`, `Сумма`, `Валюта`, `Категория`, `Метка`, `Заметка`.
+
+Import rules:
+
+- imports only into the current admin user's records;
+- uses the full period only;
+- skips duplicates by date, type, amount, currency, category, merchant, and note;
+- creates new per-user transaction numbers during import.
+
 ## Categories
 
 Current categories:
@@ -218,8 +245,10 @@ Current categories:
 - Home and renovation
 - Shopping
 - Sport
+- Education
 - Travel
 - Culture
+- Subscriptions
 - Entertainment
 - Other
 
@@ -239,6 +268,7 @@ The rules parser recognizes many Polish and Belarusian stores and services, incl
 - shopping and marketplaces: Allegro, AliExpress, Amazon, Temu, Shein, Wildberries, Ozon, Kufar, 21vek, OZ.by, Onliner, Empik;
 - electronics: Media Expert, RTV Euro AGD, Media Markt, X-Kom, Komputronik, 5 Element, Electrosila;
 - sport: Decathlon, Intersport, Sportmaster;
+- subscriptions: Netflix, Spotify, YouTube Premium, iCloud, Google One, ChatGPT, Telegram Premium, Apple Music, Yandex Plus, Kinopoisk, Steam, PS Plus, Xbox Game Pass;
 - travel: Booking, Airbnb, Ryanair, Wizz Air.
 
 Rules live in `app/services/parser.py` and are intentionally easy to edit.
