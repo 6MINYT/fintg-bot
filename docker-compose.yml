@@ -1,0 +1,76 @@
+services:
+  bot:
+    build: .
+    mem_limit: 512m
+    cpus: 0.50
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      BOT_TOKEN: ${BOT_TOKEN:-}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://fintg:fintg@db:5432/fintg}
+      APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Warsaw}
+      PARSER_MODE: ${PARSER_MODE:-rules}
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
+      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-20}
+      ADMIN_TELEGRAM_IDS: ${ADMIN_TELEGRAM_IDS:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./exports:/app/exports
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    mem_limit: 512m
+    cpus: 0.50
+    environment:
+      POSTGRES_DB: fintg
+      POSTGRES_USER: fintg
+      POSTGRES_PASSWORD: fintg
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fintg -d fintg"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  ollama:
+    profiles: ["ollama"]
+    image: ollama/ollama:latest
+    mem_limit: 2560m
+    cpus: 2.00
+    environment:
+      CUDA_VISIBLE_DEVICES: ""
+      OLLAMA_NUM_PARALLEL: 1
+      OLLAMA_MAX_LOADED_MODELS: 1
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
+  ollama-pull:
+    profiles: ["ollama"]
+    image: ollama/ollama:latest
+    mem_limit: 2560m
+    cpus: 1.00
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      CUDA_VISIBLE_DEVICES: ""
+    command: ["pull", "${OLLAMA_MODEL:-llama3.2:3b}"]
+    depends_on:
+      ollama:
+        condition: service_started
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: "no"
+
+volumes:
+  postgres_data:
+  ollama_data:
